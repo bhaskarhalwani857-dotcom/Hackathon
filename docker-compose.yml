@@ -1,0 +1,62 @@
+version: "3.8"
+
+services:
+  blackice-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: blackice-security-gateway
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=production
+      - PROJECT_NAME=BLACK ICE
+      - SECRET_KEY=blackice-production-cluster-secret-key-replace-in-env-992184
+      - DATABASE_URL=postgresql://blackice:blackice_secret@db:5432/blackice_db
+      - CORS_ORIGINS=http://localhost:5173,http://localhost:3000,http://localhost:8000,http://127.0.0.1:8000
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8000/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  db:
+    image: postgres:16-alpine
+    container_name: blackice-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=blackice_db
+      - POSTGRES_USER=blackice
+      - POSTGRES_PASSWORD=blackice_secret
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U blackice -d blackice_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: blackice-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+    driver: local
